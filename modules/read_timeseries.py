@@ -1,58 +1,32 @@
-# ###########################################################################
-#
-# Author  : Karolina Anurova-Prykhodko
-#
-# Description : Contains the functions to read MOHID timeseries files.
-#
-# ###########################################################################
+"""
+MOHID timeseries reader.
+
+Functions to read MOHID timeseries output files (.srh and .srw) and load
+them into pandas DataFrames indexed by datetime.
+
+Functions
+---------
+get_mohid_timeseries_1_file
+    Copied from MARETEC.
+    Parse a single MOHID timeseries file. Extracts the header line and the
+    data block between the <BeginTimeSerie> and <EndTimeSerie> tags, and
+    returns a DataFrame indexed by the reconstructed datetime column.
+
+read_files
+    Scan a run folder for files named `<name>_<index>.srh` and
+    `<name>_<index>.srw`, group them by numeric suffix (layer index),
+    read each pair, and merge the .srw columns onto the .srh DataFrame
+    on the time index. Returns a dict mapping each layer index to its
+    merged DataFrame.
+
+Author: Karolina Anurova-Prykhodko
+"""
 
 from datetime import datetime
 from pathlib import Path
 import re
 import pandas as pd
 
-
-
-def get_mohid_timeseries_1_file(file, remove_time_0=True):
-    """
-    Copied from MARETEC.
-
-    Function to read a single MOHID timeseries file.
-    """
-    f = open(file)
-    prev_l = ''
-    while True:
-        l = f.readline()
-        if l == '':
-            break
-        if l.find('<BeginTimeSerie>') != -1:
-            header = prev_l
-            break
-        prev_l = l
-    data = []
-    while True:
-        l = f.readline()
-        if l == '':
-            break
-        if l.find('<EndTimeSerie>') != -1:
-            break
-        data.append(l)
-    f.close()
-
-    header = header.strip(' \n')
-    header = header.split(' ')
-    header = list(filter(None, header))
-    header = ['date'] + header[7:]
-    data = [x.strip(' \n') for x in data]
-    if remove_time_0:
-        data.pop(0)
-    data = [x.split(' ') for x in data]
-    data = [list(filter(None, x)) for x in data]
-    data = [[float(x) for x in y] for y in data]
-    data = [[datetime(int(x[1]), int(x[2]), int(x[3]), int(x[4]), int(x[5]), int(float(x[6])))] + x[7:] for x in data]
-    df = pd.DataFrame.from_records(data, columns=header, index=header[0])
-
-    return df
 
 def read_files(folder, name, base_dir):
     """
@@ -130,3 +104,45 @@ def read_files(folder, name, base_dir):
             print(f"Warning: failed to read files for index {idx}: {e}")
 
     return results
+
+
+def get_mohid_timeseries_1_file(file, remove_time_0=True):
+    """
+    Copied from MARETEC.
+
+    Function to read a single MOHID timeseries file.
+    """
+    f = open(file)
+    prev_l = ''
+    while True:
+        l = f.readline()
+        if l == '':
+            break
+        if l.find('<BeginTimeSerie>') != -1:
+            header = prev_l
+            break
+        prev_l = l
+    data = []
+    while True:
+        l = f.readline()
+        if l == '':
+            break
+        if l.find('<EndTimeSerie>') != -1:
+            break
+        data.append(l)
+    f.close()
+
+    header = header.strip(' \n')
+    header = header.split(' ')
+    header = list(filter(None, header))
+    header = ['date'] + header[7:]
+    data = [x.strip(' \n') for x in data]
+    if remove_time_0:
+        data.pop(0)
+    data = [x.split(' ') for x in data]
+    data = [list(filter(None, x)) for x in data]
+    data = [[float(x) for x in y] for y in data]
+    data = [[datetime(int(x[1]), int(x[2]), int(x[3]), int(x[4]), int(x[5]), int(float(x[6])))] + x[7:] for x in data]
+    df = pd.DataFrame.from_records(data, columns=header, index=header[0])
+
+    return df
