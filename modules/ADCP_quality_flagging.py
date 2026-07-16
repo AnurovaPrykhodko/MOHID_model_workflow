@@ -289,7 +289,7 @@ def summarize_qc(ds, qc_var):
 
 
 # ###########################################################################
-# functions for vizualisation
+# functions for visualization
 # ###########################################################################
 
 def plot_masked(mask, array, mask_name):
