@@ -1,8 +1,7 @@
 """
 MOHID timeseries reader.
 
-Functions to read MOHID timeseries output files (.srh and .srw) and load
-them into pandas DataFrames indexed by datetime.
+Functions to read MOHID timeseries files and merge multiple run outputs to a dict.
 
 Functions
 ---------

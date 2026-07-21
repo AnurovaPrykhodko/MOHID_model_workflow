@@ -19,7 +19,8 @@ Application helpers
                         across all matching DataFrames (keyed by index).
 - compare_all_runs     : Apply a metric between every run and the reference
                         in a dictionary of runs.
-- by_layer             : Reorganize a per-run dict of metric DataFrames into a per-layer dict.
+- by_layer             : Reorganize a per-run dict of metric DataFrames into a per-layer dict
+- layers_to_dataarray  : Convert dataframe column to dataarray with dimesions (layer, time)
 
 All metric functions share the signature ``f(a, b) -> pd.Series``, where
 ``a`` and ``b`` are row-aligned DataFrames restricted to common columns,
@@ -30,12 +31,12 @@ Author: Karolina Anurova-Prykhodko
 
 import pandas as pd
 import numpy as np
-import pandas as pd
+import xarray as xr
 
 
 def rmse(a, b):
     """Root Mean Square Error (column-wise)."""
-    return np.sqrt(((a - b) ** 2).mean(axis=0, skipna=True))
+    return np.sqrt(((a - b) ** 2).mean(axis=0))
 
 
 def bias(a, b):
@@ -43,7 +44,7 @@ def bias(a, b):
     Mean bias (column-wise): mean(a - b).
     Positive => run overestimates the reference.
     """
-    return (a - b).mean(axis=0, skipna=True)
+    return (a - b).mean(axis=0)
 
 
 def rrmse(a, b):
@@ -56,14 +57,14 @@ def rrmse(a, b):
     Returns NaN where the model mean is zero.
     """
     r = rmse(a, b)
-    model_mean = a.mean(axis=0, skipna=True).replace(0, np.nan)
+    model_mean = a.mean(axis=0).replace(0, np.nan)
     return r / model_mean * 100
 
 
 def sensitivity_index(a, b):
     """Sensitivity Index (column-wise): RMSE / (b_max - b_min)."""
     r = rmse(a, b)
-    ref_range = b.max(axis=0, skipna=True) - b.min(axis=0, skipna=True)
+    ref_range = b.max(axis=0) - b.min(axis=0)
     ref_range = ref_range.replace(0, np.nan)
     return r / ref_range
 
@@ -197,3 +198,124 @@ def by_layer(results_per_run):
         layer: combined.xs(layer, level='layer').sort_index()
         for layer in sorted(layers)
     }
+
+
+def layers_to_dataarray(run_dict, column='velocity_U', range_name='range'):
+    """
+    Convert a dict of per-layer DataFrames into a DataArray (range, time),
+    preserving the datetime index from the source DataFrames.
+
+    Parameters
+    ----------
+    run_dict : dict[int, pd.DataFrame]
+        e.g. all_results['Run1']; each value is a DataFrame indexed by time
+        and containing `column`.
+    column : str
+        Column to extract.
+    range_name : str
+        Name of the layer/range coordinate.
+
+    Returns
+    -------
+    xarray.DataArray with dims (range, time)
+    """
+    layers = sorted(run_dict.keys())
+
+    # Keep the original (datetime) index; concat aligns on it automatically
+    series_list = [run_dict[k][column].rename(k) for k in layers]
+    df = pd.concat(series_list, axis=1)      # index = time, columns = layers
+    df = df.sort_index()
+
+    data = df.values.T                       # (n_layers, n_time)
+
+    da = xr.DataArray(
+        data,
+        dims=(range_name, 'time'),
+        coords={
+            range_name: np.array(layers, dtype=float),
+            'time': df.index.values,         # preserved datetimes
+        },
+        name=column,
+    )
+    return da
+
+def compare_vs_reference_da(run_da, ref_da, metric_fn,
+                            range_dim='range', time_dim='time'):
+    """
+    Compare two DataArrays layer-by-layer along `range_dim`.
+
+    Parameters
+    ----------
+    run_da, ref_da : xarray.DataArray
+        Must share `range_dim` and `time_dim`.
+    metric_fn : callable(a, b) -> float
+        Takes two 1D numpy arrays (already NaN-aligned) and returns a scalar.
+
+    Returns
+    -------
+    pd.Series indexed by range values.
+    """
+    # Align on time
+    a, b = xr.align(run_da, ref_da, join='inner')
+
+    results = {}
+    for r in a[range_dim].values:
+        x = a.sel({range_dim: r}).values
+        y = b.sel({range_dim: r}).values
+        mask = np.isfinite(x) & np.isfinite(y)
+        if mask.sum() == 0:
+            results[r] = np.nan
+        else:
+            results[r] = metric_fn(x[mask], y[mask])
+
+    return pd.Series(results).sort_index()
+
+def compare_vs_reference_df(run, reference, metric_fn, columns=None):
+    """
+    Compare a run DataFrame against a reference DataFrame on shared
+    timestamps, computing `metric_fn` per column.
+
+    Parameters
+    ----------
+    run : pd.DataFrame
+        Indexed by timestamp.
+    reference : pd.DataFrame
+        Indexed by timestamp.
+    metric_fn : callable
+        Function of the form f(a, b) -> float, where `a` and `b` are
+        row-aligned 1-D Series for a single column.
+    columns : str | list[str], optional
+        Column(s) to compare. If None, all common columns are used.
+
+    Returns
+    -------
+    pd.Series
+        Index = column name, values = metric.
+    """
+    if isinstance(columns, str):
+        columns = [columns]
+
+    if columns is None:
+        cols = [c for c in run.columns if c in reference.columns]
+    else:
+        cols = [c for c in columns
+                if c in run.columns and c in reference.columns]
+
+    if not cols:
+        raise ValueError("No common columns to compare.")
+
+    a, b = run[cols].align(reference[cols], join='inner', axis=0)
+
+    if a.empty:
+        raise ValueError("No overlapping timestamps between run and reference.")
+
+    # Drop rows where either side has NaN, per column, before applying metric
+    results = {}
+    for c in cols:
+        pair = pd.concat([a[c], b[c]], axis=1, keys=['run', 'ref']).dropna()
+        if pair.empty:
+            results[c] = float('nan')
+        else:
+            results[c] = metric_fn(pair['run'], pair['ref'])
+
+    return pd.Series(results, name=metric_fn.__name__)

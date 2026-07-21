@@ -436,3 +436,65 @@ def interp_profile(vel, coord, coord_new):
     """Interpolate a single velocity profile from time varying coordinate to constant coordinate."""
     f = interp1d(coord, vel, kind='linear', bounds_error=False, fill_value=np.nan)
     return f(coord_new)
+
+
+def plot_profiles(vel, range_coord='range', range_slice=(5, 25),
+                  mean_color='green', alpha_grey = 0.4,
+                  xlabel='V (m/s)', ylabel='Range (m)', title='ADCP V',
+                  figsize=(4, 4), ax=None):
+    """
+    Plot individual velocity profiles (gray) and the time-mean profile.
+
+    Parameters
+    ----------
+    vel : xarray.DataArray
+        Velocity with dims (range, time) — e.g. vel_h[1] or ds['vel'][0].
+    range_coord : str
+        Name of the range coordinate on `vel`.
+    range_slice : tuple(float, float) or None
+        (min, max) range to select. Use None to keep full range.
+    mean_color : {'green', 'blue'}
+        Color of the mean profile line.
+    xlabel, ylabel, title : str
+        Axis labels and title.
+    figsize : tuple
+        Figure size, used only if `ax` is None.
+    ax : matplotlib.axes.Axes or None
+        Existing axes to plot into. If None, a new figure/axes is created.
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+    """
+    color_map = {'green': 'limegreen', 'blue': 'dodgerblue'}
+    if mean_color not in color_map:
+        raise ValueError(f"mean_color must be one of {list(color_map)}, got {mean_color!r}")
+    mean_c = color_map[mean_color]
+
+    # Optional range subsetting
+    if range_slice is not None:
+        vel = vel.sel({range_coord: slice(*range_slice)})
+
+    v = vel.values                       # (range, time)
+    r = vel[range_coord].values          # (range,)
+
+    # Ensure orientation is (range, time)
+    if v.shape[0] != r.size and v.shape[1] == r.size:
+        v = v.T
+
+    v_mean = np.nanmean(v, axis=1)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
+    ax.plot(v, r, color='gray', linewidth=0.5, alpha=alpha_grey)
+    ax.plot(v_mean, r, color=mean_c, linewidth=3)
+
+    ax.axvline(0, color='k', linewidth=0.5, alpha=0.3)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(alpha=0.2)
+
+    plt.tight_layout()
+    return ax
