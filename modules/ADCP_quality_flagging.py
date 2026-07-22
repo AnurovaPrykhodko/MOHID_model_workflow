@@ -9,6 +9,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch
+from matplotlib.ticker import FormatStrFormatter
 import numpy as np
 import xarray as xr
 from scipy.interpolate import interp1d
@@ -495,6 +496,14 @@ def plot_profiles(vel, range_coord='range', range_slice=(5, 25),
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(alpha=0.2)
-
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     plt.tight_layout()
     return ax
+
+def speed(df):
+    """Speed."""
+    return np.sqrt(df[0]**2 + df[1]**2)
+
+def direction(df):
+    """Direction."""
+    return (np.degrees(np.arctan2(df[0], df[1]))) % 360

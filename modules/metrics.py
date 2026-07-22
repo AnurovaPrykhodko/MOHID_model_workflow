@@ -32,7 +32,7 @@ Author: Karolina Anurova-Prykhodko
 import pandas as pd
 import numpy as np
 import xarray as xr
-
+from scipy.stats import pearsonr
 
 def rmse(a, b):
     """Root Mean Square Error (column-wise)."""
@@ -70,25 +70,7 @@ def sensitivity_index(a, b):
 
 
 def pearson_r(a, b):
-    """
-    Pearson correlation coefficient (column-wise) between `a` and `b`.
-    NaNs are handled pairwise per column.
-    """
-    out = {}
-    for c in a.columns:
-        s1, s2 = a[c], b[c]
-        mask = s1.notna() & s2.notna()
-        if mask.sum() < 2:
-            out[c] = np.nan
-            continue
-        x, y = s1[mask], s2[mask]
-        sx, sy = x.std(ddof=0), y.std(ddof=0)
-        if sx == 0 or sy == 0:
-            out[c] = np.nan
-        else:
-            out[c] = ((x - x.mean()) * (y - y.mean())).mean() / (sx * sy)
-    return pd.Series(out)
-
+    return pearsonr(a, b)[0]
 
 def mss(a, b):
     """
@@ -105,7 +87,10 @@ def mss(a, b):
 
     num = ((a - b) ** 2).sum(axis=0, skipna=True)
     denom = (((a - b_mean).abs() + (b - b_mean).abs()) ** 2).sum(axis=0, skipna=True)
-    denom = denom.replace(0, np.nan)
+    
+    if denom == 0:
+        raise ValueError
+    #denom = denom.replace(0, np.nan)
 
     return 1 - num / denom
 
@@ -319,3 +304,61 @@ def compare_vs_reference_df(run, reference, metric_fn, columns=None):
             results[c] = metric_fn(pair['run'], pair['ref'])
 
     return pd.Series(results, name=metric_fn.__name__)
+
+def compare_multi_metrics(run, reference, metric_fns, columns=None, run_name=None):
+    """
+    Compare a run DataFrame against a reference across multiple metrics.
+
+    Parameters
+    ----------
+    run : pd.DataFrame
+    reference : pd.DataFrame
+    metric_fns : list[callable]
+        Each callable f(a, b) -> float. Its __name__ is used as the metric column.
+    columns : str | list[str], optional
+        Columns to compare. If None, all common columns are used.
+    run_name : str, optional
+        Label for this run, stored in a 'run' column. Defaults to 'run'.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per compared column. Columns: ['run', 'variable', <metric names...>].
+    """
+    series_list = []
+    for fn in metric_fns:
+        s = compare_vs_reference_df(run, reference, fn, columns=columns)
+        # Use the callable's __name__ (fallback for things like pearsonr wrappers)
+        s.name = getattr(fn, "__name__", str(fn))
+        series_list.append(s)
+
+    df = pd.concat(series_list, axis=1)
+    df.index.name = "variable"
+    df = df.reset_index()
+    df.insert(0, "run", run_name if run_name is not None else "run")
+    return df
+
+
+def compare_runs(runs, reference, metric_fns, columns=None):
+    """
+    Compare several runs against the same reference.
+
+    Parameters
+    ----------
+    runs : dict[str, pd.DataFrame]
+        Mapping of run label -> run DataFrame.
+    reference : pd.DataFrame
+    metric_fns : list[callable]
+    columns : str | list[str], optional
+
+    Returns
+    -------
+    pd.DataFrame
+        Stacked results with columns ['run', 'variable', <metric names...>].
+    """
+    frames = [
+        compare_multi_metrics(run_df, reference, metric_fns,
+                              columns=columns, run_name=label)
+        for label, run_df in runs.items()
+    ]
+    return pd.concat(frames, ignore_index=True)
