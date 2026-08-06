@@ -18,8 +18,8 @@ def MOHIDHdf5toNetcdf(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''
     dates_in = dates
     
 #    #Writing variables from 'Results'
-    var_to_write=['salinity','temperature']
-    var_to_read=['salinity','temperature']    
+    var_to_write=['temperature']
+    var_to_read=['temperature']    
     t=in_t
     #stride = file_stride
     timeindex=-1
