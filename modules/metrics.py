@@ -11,20 +11,15 @@ Metrics
 - rrmse             : Relative RMSE (RMSE / mean of reference)
 - sensitivity_index : RMSE normalized by the reference range (max - min)
 - pearson_r         : Pearson correlation coefficient
-- mss               : Model Skill Score (Murphy 1988) / Nash-Sutcliffe efficiency
+- mss               : Model Skill Score 
 
 Application helpers
 -------------------
-- compare_vs_reference : Apply a metric between one run and the reference,
-                        across all matching DataFrames (keyed by index).
+- compare_vs_reference : Apply a metric between one run and the reference.
 - compare_all_runs     : Apply a metric between every run and the reference
                         in a dictionary of runs.
-- by_layer             : Reorganize a per-run dict of metric DataFrames into a per-layer dict
-- layers_to_dataarray  : Convert dataframe column to dataarray with dimesions (layer, time)
-
-All metric functions share the signature ``f(a, b) -> pd.Series``, where
-``a`` and ``b`` are row-aligned DataFrames restricted to common columns,
-so new metrics can be added and passed directly to the application helpers.
+- by_layer             : Reorganize a per-run dict of metric DataFrames into a per-layer dict.
+- layers_to_dataarray  : Convert dataframe column to dataarray with dimesions.
 
 Author: Karolina Anurova-Prykhodko
 """
