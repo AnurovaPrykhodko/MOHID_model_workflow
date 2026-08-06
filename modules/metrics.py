@@ -1,6 +1,4 @@
 """
-Metrics module.
-
 Provides functions to compare model output against a reference (reference simulation or observations),
 using common metrics, and utilities to apply them across multiple runs outputs.
 

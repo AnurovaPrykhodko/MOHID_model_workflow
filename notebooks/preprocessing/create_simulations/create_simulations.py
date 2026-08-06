@@ -1,17 +1,14 @@
-# ###########################################################################
-#
-# Author: Karolina Anurova-Prykhodko
-#
-# Description: Made in order to have different simulations with varying parameters
-#              for sensitivity analysis and calibration. 
-# 
-#              - Copies files from template simulation to the rest.
-#     
-#              (add)
-#              - choice to change parameters for respective simulation.
-#
-# ###########################################################################
+"""
+Module to automate creation of simulation configuration files 
+with varying parameters to facilitate sensitivity analysis and calibration. 
 
+- Copies files from template simulation to the rest.
+
+(add?)
+- choice to change parameters for respective simulation.
+
+Author: Karolina Anurova-Prykhodko
+"""
 
 import re
 import shutil

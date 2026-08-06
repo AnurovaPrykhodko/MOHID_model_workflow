@@ -1,3 +1,10 @@
+"""
+General helpers
+
+Author: Karolina Anurova-Prykhodko
+"""
+
+
 import numpy as np
 import pandas as pd
 
