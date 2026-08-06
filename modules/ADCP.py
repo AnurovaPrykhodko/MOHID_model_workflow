@@ -1,10 +1,39 @@
-# ###########################################################################
-#
-# Author  : Karolina Anurova-Prykhodko
-#
-# Description : Contains the functions to quality flag ADCP data.
-#
-# ###########################################################################
+"""
+Provides functions related to quality flagging of ADCP data, helpers,
+utilities and visualization of data and quality flags.
+
+Quality control 
+-------------------
+- detect_outliers       : Detect amplitude outliers.
+- detect_const_pressure : Detect periods of nearly constant pressure over consecutive
+                          time steps.
+- detect_spikes         : Detect spikes using rolling-window z-scores.
+- cusum_test            : Apply a cumulative sum test to identify likely change points.
+- rolling_gradient      : Calculate rolling-window gradients.
+- detect_decay_error    : Detect unrealistic signal-amplitude decay profiles.
+
+Application helpers
+-------------------
+- apply_qc_mask         : Apply a boolean mask to update primary and secondary QC flags.
+- summarize_qc          : Print a summary of QC flag counts and percentages.
+
+Visualization
+-------------
+- plot_masked           : Plot values selected by a mask.
+- plot_qc_primary       : Plot primary QC flags.
+- plot_qc_secondary     : Plot secondary QC flags.
+- plot_profiles         : Plot individual velocity profiles and their mean profile.
+
+Utility functions
+-----------------
+- print_data_removed    : Print the amount and percentage of data removed.
+- interp_profile        : Interpolate velocity profile to fixed coordinates.
+- speed                 : Compute horizontal speed from two velocity components.
+- direction             : Compute current direction from two velocity components.
+
+Author: Karolina Anurova-Prykhodko
+"""
+
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
@@ -417,10 +446,6 @@ def plot_qc_secondary(ds, direction=0):
 
     plt.tight_layout()
     plt.show()
-
-# ###########################################################################
-# could potentially be removed
-# ###########################################################################
 
 def print_data_removed(ds_before, ds_after, variable):
     """
