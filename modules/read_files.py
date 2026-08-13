@@ -1,19 +1,27 @@
 """
 Provides functions related to reading MOHID output files.
 
-Functions
+Functions (original)
 ---------
-MOHIDHdf5toNetcdf
-    Adjusted from MARETEC. Reads a MOHID Hdf5 file and converts it into Netcdf.
-
-get_mohid_timeseries_1_file
-    Copied from MARETEC.
-    Reads a MOHID timeseries file
-
-read_files
-    Reads all MOHID timeseries files in a folder.
+    read_files
+        Reads all MOHID timeseries files in a folder.
 
 Author: Karolina Anurova-Prykhodko
+
+Functions (not original)
+---------
+From SMS-Coastal:
+    convert2hdf5
+    
+    chklog
+
+From MARETEC
+    MOHIDHdf5toNetcdf
+        Reads a MOHID Hdf5 file and converts it into Netcdf.
+
+    get_mohid_timeseries_1_file
+        Reads a MOHID timeseries file
+
 """
 
 from datetime import datetime
@@ -23,6 +31,11 @@ import pandas as pd
 import h5py
 import numpy as np
 import xarray as xr
+
+
+from os import chdir, getcwd, path
+from shutil import copyfile
+from subprocess import run
 
 def MOHIDHdf5toNetcdf(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''):
     f = h5py.File(filename,'r')
@@ -109,6 +122,77 @@ def MOHIDHdf5toNetcdf(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''
     #var_to_compute=['Uavg','Vavg']
     return t, dates
 
+def chklog(flog) -> int:
+    """Check for the successful message in a MOHID log file."""
+
+    status = 1
+    dat = open(flog, "r")
+    line = dat.readline()
+
+    while line:
+        if ("Program" and "successfully terminated") in line:
+            line = None
+            status = 0
+            continue
+        line = next(dat, None)
+
+    dat.close()
+    return status
+
+def convert2hdf5(mohidir: str, mdat: str, outdir: str) -> int:
+    """Runs the program Convert2Hdf5.exe from MOHID.
+    Relative paths are allowed.
+    
+    Keyword arguments
+    - mohidir: path to the directory with the MOHID tool and its libraries;
+    - mdat: name and path to the ConvertToHDF5Action.dat file;
+    - outdir: output file directory, where the log will also be written.
+    """
+
+    # Set paths:
+    curdir = getcwd()
+    mohidir = path.abspath(mohidir)
+    mdat = path.abspath(mdat)
+    
+    # Check MOHID files:
+    if not path.isdir(mohidir):
+        print("[ERROR] m_supp_mohid: MOHID directory not found")
+        return 1
+    elif not path.isfile(mdat):
+        print("[ERROR] m_supp_mohid: MOHID conversion .dat file not found")
+        return 1
+    
+    mlog = path.join(path.abspath(outdir), "mohidlog.dat")
+    copyfile(mdat, path.join(mohidir, "ConvertToHDF5Action.dat"))
+
+    mfiles = (
+        "Convert2Hdf5.exe", "hdf5.dll", "hdf5dll.dll", "hdf5_f90cstub.dll",
+        "hdf5_fortran.dll", "hdf5_hl.dll", "hdf5_tools.dll", "libcurl.dll",
+        "libiomp5md.dll", "msvcp140.dll", "msvcr120.dll", "netcdf.dll",
+        "szip.dll", "szlibdll.dll", "vcruntime140.dll", "zlib.dll",
+        "zlib1.dll",
+    )
+    mfiles = [path.join(mohidir, file) for file in mfiles]
+
+    for file in mfiles:
+        if path.isfile(file): continue
+        print("[ERROR] m_supp_mohid: MOHID file missing:", file)
+        return 1
+
+    # Change to MOHID working directory and run program:
+    print("Running MOHID Convert2Hdf5...")
+    chdir(mohidir)
+
+    with open("nomfich.dat", "w") as dat:
+        dat.write("ROOT_SRT : .\\\n")
+        dat.write("IN_MODEL : ConvertToHDF5Action.dat\n")
+
+    cmd = "Convert2Hdf5.exe > " + mlog
+    print(cmd)
+    run(cmd, shell=True)
+    chdir(curdir)
+
+    return chklog(mlog)
 
 def get_mohid_timeseries_1_file(file, remove_time_0=True):
     """
