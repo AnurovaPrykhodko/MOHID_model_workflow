@@ -1,0 +1,89 @@
+! Paths relative to MOHID exe directory
+<begin_file>
+ACTION              : CONVERT NETCDF CF TO HDF5 MOHID
+HDF5_OUT            : 1
+NETCDF_OUT          : 0
+OUTPUTFILENAME      : ..\..\data\preprocessing\CERRA\conversion\cerra.hdf5
+
+<<begin_time>>
+NETCDF_NAME         : valid_time
+<<end_time>>
+
+<<begin_grid>>
+NETCDF_NAME_LAT     : latitude
+NETCDF_NAME_LONG    : longitude
+NETCDF_NAME_MAPPING : t2m
+MAPPING_LIMIT       : -10000
+<<end_grid>>
+
+PROPERTIES_NUMBER   : 8
+
+<<begin_field>>
+NETCDF_NAME     : t2m
+NAME            : air temperature
+UNITS           : degC
+DESCRIPTION     : CERRA temperature
+DIM             : 2
+<<end_field>>
+
+<<begin_field>>
+NETCDF_NAME     : lsm
+NAME            : bathymetry
+UNITS           : -
+DESCRIPTION     : CERRA land-sea mask
+DIM             : 2
+<<end_field>>
+
+<<begin_field>>
+NETCDF_NAME     : sp
+NAME            : atmospheric pressure
+UNITS           : Pa
+DESCRIPTION     : CERRA atmospheric pressure
+DIM             : 2
+<<end_field>>
+
+<<begin_field>>
+NETCDF_NAME     : tcc
+NAME            : cloud cover
+UNITS           : -
+DESCRIPTION     : CERRA cloud cover
+DIM             : 2
+<<end_field>>
+
+<<begin_field>>
+NETCDF_NAME     : r2
+NAME            : relative humidity
+UNITS           : -
+DESCRIPTION     : CERRA relative humidity
+DIM             : 2
+<<end_field>>
+
+<<begin_field>>
+NETCDF_NAME     : si10
+NAME            : wind modulus
+UNITS           : m/s
+DESCRIPTION     : CERRA wind modulus
+DIM             : 2
+<<end_field>>
+
+<<begin_field>>
+NETCDF_NAME     : u10
+NAME            : wind velocity X
+UNITS           : m/s
+DESCRIPTION     : CERRA wind velocity X
+DIM             : 2
+<<end_field>>
+
+<<begin_field>>
+NETCDF_NAME     : v10
+NAME            : wind velocity Y
+UNITS           : m/s
+DESCRIPTION     : CERRA wind velocity Y
+DIM             : 2
+<<end_field>>
+
+
+<<begin_input_files>>
+..\..\data\preprocessing\CERRA\download\cerra_subset.nc
+<<end_input_files>>
+<end_file>
