@@ -88,96 +88,6 @@ def mss(a, b):
     return 1 - num / denom
 
 
-def compare_vs_reference(run, reference, metric_fn, columns=None):
-    """
-    Apply `metric_fn(a, b)` column-wise between each DataFrame in `run`
-    and the matching DataFrame in `reference`, keyed by index.
-
-    Parameters
-    ----------
-    run : dict[int, pd.DataFrame]
-    reference : dict[int, pd.DataFrame]
-    metric_fn : callable
-        Function of the form f(a, b) -> pd.Series, where `a` and `b` are
-        row-aligned DataFrames restricted to the columns of interest,
-        and the returned Series is indexed by column name.
-    columns : list[str], optional
-        Restrict the comparison to these columns. If None, all common
-        columns are used.
-
-    Returns
-    -------
-    pd.DataFrame
-        Rows = suffix index, columns = data columns, values = metric.
-    """
-    rows = {}
-
-    for idx, df_run in run.items():
-        if idx not in reference:
-            print(f"Warning: index {idx} not in reference, skipping.")
-            continue
-
-        df_ref = reference[idx]
-
-        if columns is None:
-            cols = [c for c in df_run.columns if c in df_ref.columns]
-        else:
-            cols = [c for c in columns
-                    if c in df_run.columns and c in df_ref.columns]
-
-        if not cols:
-            print(f"Warning: no common columns for index {idx}, skipping.")
-            continue
-
-        a, b = df_run[cols].align(df_ref[cols], join='inner', axis=0)
-        rows[idx] = metric_fn(a, b)
-
-    return pd.DataFrame.from_dict(rows, orient='index').sort_index()
-
-
-def compare_all_runs(all_results, metric_fn, reference_key='Run1', columns=None):
-    """
-    Apply `metric_fn` between every run in `all_results` and the reference run.
-
-    Returns
-    -------
-    dict[str, pd.DataFrame]
-        Keyed by run name (excluding the reference).
-    """
-    ref = all_results[reference_key]
-    return {
-        run_key: compare_vs_reference(run, ref, metric_fn, columns=columns)
-        for run_key, run in all_results.items()
-        if run_key != reference_key
-    }
-
-def by_layer(results_per_run):
-    """
-    Reorganize a per-run dict of metric DataFrames into a per-layer dict.
-
-    Input
-    -----
-    results_per_run : dict[str, pd.DataFrame]
-        Output of `compare_all_runs`. Keys are run names (e.g. 'Run2', 'Run3'),
-        values are DataFrames with rows = layer index, columns = data columns.
-
-    Output
-    ------
-    dict[int, pd.DataFrame]
-        Keys are layer indices. Each DataFrame has rows = run name,
-        columns = data columns.
-    """
-    # Stack all run DataFrames into one with a (run, layer) MultiIndex
-    combined = pd.concat(results_per_run, names=['run', 'layer'])
-
-    # For each layer, pull out its cross-section (rows indexed by run)
-    layers = combined.index.get_level_values('layer').unique()
-    return {
-        layer: combined.xs(layer, level='layer').sort_index()
-        for layer in sorted(layers)
-    }
-
-
 def layers_to_dataarray(run_dict, column='velocity_U', range_name='range'):
     """
     Convert a dict of per-layer DataFrames into a DataArray (range, time),
@@ -217,6 +127,7 @@ def layers_to_dataarray(run_dict, column='velocity_U', range_name='range'):
     )
     return da
 
+# perhaps use for SST or remove
 def compare_vs_reference_da(run_da, ref_da, metric_fn,
                             range_dim='range', time_dim='time'):
     """
@@ -250,8 +161,8 @@ def compare_vs_reference_da(run_da, ref_da, metric_fn,
 
 def compare_vs_reference_df(run, reference, metric_fn, columns=None):
     """
-    Compare a run DataFrame against a reference DataFrame on shared
-    timestamps, computing `metric_fn` per column.
+    Compare model output against a reference, computing the function(s)
+    metric_fn per column.
 
     Parameters
     ----------
@@ -276,25 +187,33 @@ def compare_vs_reference_df(run, reference, metric_fn, columns=None):
     if columns is None:
         cols = [c for c in run.columns if c in reference.columns]
     else:
-        cols = [c for c in columns
-                if c in run.columns and c in reference.columns]
+        cols = [
+            c for c in columns
+            if c in run.columns and c in reference.columns
+        ]
 
     if not cols:
         raise ValueError("No common columns to compare.")
 
-    a, b = run[cols].align(reference[cols], join='inner', axis=0)
+    a, b = run[cols].align(reference[cols], join="inner", axis=0)
 
     if a.empty:
-        raise ValueError("No overlapping timestamps between run and reference.")
+        raise ValueError("No overlapping timestamps between model output and reference.")
 
     # Drop rows where either side has NaN, per column, before applying metric
     results = {}
+
     for c in cols:
-        pair = pd.concat([a[c], b[c]], axis=1, keys=['run', 'ref']).dropna()
+        pair = pd.concat(
+            [a[c], b[c]],
+            axis=1,
+            keys=["model_output", "reference"]
+        ).dropna()
+
         if pair.empty:
-            results[c] = float('nan')
+            results[c] = float("nan")
         else:
-            results[c] = metric_fn(pair['run'], pair['ref'])
+            results[c] = metric_fn(pair["model_output"], pair["reference"])
 
     return pd.Series(results, name=metric_fn.__name__)
 
@@ -328,30 +247,4 @@ def compare_multi_metrics(run, reference, metric_fns, columns=None, run_name=Non
     df = pd.concat(series_list, axis=1)
     df.index.name = "variable"
     df = df.reset_index()
-    df.insert(0, "run", run_name if run_name is not None else "run")
     return df
-
-
-def compare_runs(runs, reference, metric_fns, columns=None):
-    """
-    Compare several runs against the same reference.
-
-    Parameters
-    ----------
-    runs : dict[str, pd.DataFrame]
-        Mapping of run label -> run DataFrame.
-    reference : pd.DataFrame
-    metric_fns : list[callable]
-    columns : str | list[str], optional
-
-    Returns
-    -------
-    pd.DataFrame
-        Stacked results with columns ['run', 'variable', <metric names...>].
-    """
-    frames = [
-        compare_multi_metrics(run_df, reference, metric_fns,
-                              columns=columns, run_name=label)
-        for label, run_df in runs.items()
-    ]
-    return pd.concat(frames, ignore_index=True)

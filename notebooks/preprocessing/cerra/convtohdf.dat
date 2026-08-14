@@ -3,7 +3,7 @@
 ACTION              : CONVERT NETCDF CF TO HDF5 MOHID
 HDF5_OUT            : 1
 NETCDF_OUT          : 0
-OUTPUTFILENAME      : ..\..\data\preprocessing\CERRA\conversion\cerra.hdf5
+OUTPUTFILENAME      : ..\..\data\CERRA\conversion\cerra.hdf5
 
 <<begin_time>>
 NETCDF_NAME         : valid_time
@@ -84,6 +84,6 @@ DIM             : 2
 
 
 <<begin_input_files>>
-..\..\data\preprocessing\CERRA\download\cerra_subset.nc
+..\..\data\CERRA\download\cerra_subset.nc
 <<end_input_files>>
 <end_file>

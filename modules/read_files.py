@@ -4,24 +4,26 @@ Provides functions related to reading MOHID output files.
 Functions (original)
 ---------
     read_files
-        Reads all MOHID timeseries files in a folder.
+        Scans a folder for MOHID .srh timeseries files and reads them.
 
 Author: Karolina Anurova-Prykhodko
 
+
+
 Functions (not original)
 ---------
-From SMS-Coastal:
-    convert2hdf5
-    
-    chklog
-
-From MARETEC
+From MARETEC (https://github.com/maretec/MOHID_python_tools):
     MOHIDHdf5toNetcdf
         Reads a MOHID Hdf5 file and converts it into Netcdf.
 
     get_mohid_timeseries_1_file
         Reads a MOHID timeseries file
 
+From SMS-Coastal (https://github.com/fmmendonca/SMS-Coastal):
+    convert2hdf5
+        Converts a Netcdf to Hdf5
+    chklog
+        Check MOHID log if convert2hdf5 was succecful
 """
 
 from datetime import datetime
@@ -31,11 +33,59 @@ import pandas as pd
 import h5py
 import numpy as np
 import xarray as xr
-
-
 from os import chdir, getcwd, path
 from shutil import copyfile
 from subprocess import run
+
+def read_files(base_dir, folder, name):
+    """
+    Read all `.srh` files in `base_dir / folder` whose names are
+    `name_1`, `name_2`, ...
+
+    Parameters
+    ----------
+    base_dir : Path
+    folder : str
+        Subfolder inside `base_dir` (e.g. 'Run1').
+    name : str
+        Base file name without the `_<index>` suffix (e.g. 'layer_17').
+
+    Returns
+    -------
+    dict
+        Mapping from the suffix index to a each dataframe.
+    """
+    folder_path = Path(base_dir) / folder
+
+    if not folder_path.is_dir():
+        raise NotADirectoryError(f"Folder does not exist: {folder_path.resolve()}")
+
+    pattern = re.compile(
+        rf"^{re.escape(name)}_(\d+)\.srh$",
+        re.IGNORECASE
+    )
+
+    results = {}
+
+    for srh_path in folder_path.glob("*.srh"):
+        match = pattern.match(srh_path.name)
+
+        if not match:
+            continue
+
+        idx = int(match.group(1))
+
+        try:
+            results[idx] = get_mohid_timeseries_1_file(str(srh_path))
+        except Exception as e:
+            print(f"Warning: failed to read {srh_path.name}: {e}")
+
+    if not results:
+        raise FileNotFoundError(
+            f"No .srh files matching '{name}_<index>.srh' found in {folder_path.resolve()}"
+        )
+
+    return dict(sorted(results.items()))
 
 def MOHIDHdf5toNetcdf(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''):
     f = h5py.File(filename,'r')
@@ -52,7 +102,7 @@ def MOHIDHdf5toNetcdf(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''
     var_to_write=['temperature']
     var_to_read=['temperature']    
     t=in_t
-    #stride = file_stride
+
     timeindex=-1
     for timestep in TimeList:
         readtime = 1
@@ -81,8 +131,6 @@ def MOHIDHdf5toNetcdf(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''
                     ds.to_netcdf(outdir+'WaterProperties_'+str(t).zfill(4)+'.nc',mode='a')
                 k=k+1        
             t=t+1
-             #   stride = 0
-            #stride=stride+1
         
     #Writing variables from 'Grid'
     var_to_write=['Bathymetry']
@@ -115,12 +163,49 @@ def MOHIDHdf5toNetcdf(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''
                 ds.to_netcdf(outdir+'WaterProperties_'+str(t).zfill(4)+'.nc',mode='a')
                 k=k+1
             t=t+1
-             #   stride = 0
-            #stride=stride+1
-    
-    #Writing computed variables
-    #var_to_compute=['Uavg','Vavg']
+
     return t, dates
+
+def get_mohid_timeseries_1_file(file, remove_time_0=True):
+    """
+    Copied from MARETEC.
+
+    Function to read a single MOHID timeseries file.
+    """
+    f = open(file)
+    prev_l = ''
+    while True:
+        l = f.readline()
+        if l == '':
+            break
+        if l.find('<BeginTimeSerie>') != -1:
+            header = prev_l
+            break
+        prev_l = l
+    data = []
+    while True:
+        l = f.readline()
+        if l == '':
+            break
+        if l.find('<EndTimeSerie>') != -1:
+            break
+        data.append(l)
+    f.close()
+
+    header = header.strip(' \n')
+    header = header.split(' ')
+    header = list(filter(None, header))
+    header = ['date'] + header[7:]
+    data = [x.strip(' \n') for x in data]
+    if remove_time_0:
+        data.pop(0)
+    data = [x.split(' ') for x in data]
+    data = [list(filter(None, x)) for x in data]
+    data = [[float(x) for x in y] for y in data]
+    data = [[datetime(int(x[1]), int(x[2]), int(x[3]), int(x[4]), int(x[5]), int(float(x[6])))] + x[7:] for x in data]
+    df = pd.DataFrame.from_records(data, columns=header, index=header[0])
+
+    return df
 
 def chklog(flog) -> int:
     """Check for the successful message in a MOHID log file."""
@@ -194,121 +279,3 @@ def convert2hdf5(mohidir: str, mdat: str, outdir: str) -> int:
 
     return chklog(mlog)
 
-def get_mohid_timeseries_1_file(file, remove_time_0=True):
-    """
-    Copied from MARETEC.
-
-    Function to read a single MOHID timeseries file.
-    """
-    f = open(file)
-    prev_l = ''
-    while True:
-        l = f.readline()
-        if l == '':
-            break
-        if l.find('<BeginTimeSerie>') != -1:
-            header = prev_l
-            break
-        prev_l = l
-    data = []
-    while True:
-        l = f.readline()
-        if l == '':
-            break
-        if l.find('<EndTimeSerie>') != -1:
-            break
-        data.append(l)
-    f.close()
-
-    header = header.strip(' \n')
-    header = header.split(' ')
-    header = list(filter(None, header))
-    header = ['date'] + header[7:]
-    data = [x.strip(' \n') for x in data]
-    if remove_time_0:
-        data.pop(0)
-    data = [x.split(' ') for x in data]
-    data = [list(filter(None, x)) for x in data]
-    data = [[float(x) for x in y] for y in data]
-    data = [[datetime(int(x[1]), int(x[2]), int(x[3]), int(x[4]), int(x[5]), int(float(x[6])))] + x[7:] for x in data]
-    df = pd.DataFrame.from_records(data, columns=header, index=header[0])
-
-    return df
-
-
-def read_files(folder, name, base_dir):
-    """
-    Read all `.srh` and `.srw` files in `base_dir / folder` whose names are
-    `name_1`, `name_2`, ... For each index, columns from the `.srw` file are
-    appended to the `.srh` file.
-
-    Parameters
-    ----------
-    folder : str
-        Subfolder inside `base_dir` (e.g. 'Run1').
-    name : str
-        Base file name without the `_<index>` suffix (e.g. '36_17').
-    base_dir : Path
-
-    Returns
-    -------
-    dict
-        Mapping from the suffix index (int) to the merged DataFrame.
-    """
-    folder_path = Path(base_dir) / folder
-
-    if not folder_path.is_dir():
-        raise NotADirectoryError(f"Folder does not exist: {folder_path.resolve()}")
-
-    # Match "<name>_<number>.srh" or "<name>_<number>.srw"
-    pattern = re.compile(rf"^{re.escape(name)}_(\d+)\.(srh|srw)$", re.IGNORECASE)
-
-    # Collect files grouped by index: {idx: {'srh': path, 'srw': path}}
-    grouped = {}
-    for entry in folder_path.iterdir():
-        if not entry.is_file():
-            continue
-        m = pattern.match(entry.name)
-        if m:
-            idx = int(m.group(1))
-            ext = m.group(2).lower()
-            grouped.setdefault(idx, {})[ext] = entry
-
-    if not grouped:
-        raise FileNotFoundError(
-            f"No files matching '{name}_<index>.srh/.srw' found in {folder_path.resolve()}"
-        )
-
-    results = {}
-    for idx in sorted(grouped):
-        files = grouped[idx]
-        srh_path = files.get('srh')
-        srw_path = files.get('srw')
-
-        try:
-            if srh_path is not None:
-                df_srh = get_mohid_timeseries_1_file(str(srh_path))
-            else:
-                df_srh = None
-                print(f"Warning: no .srh file for index {idx}")
-
-            if srw_path is not None:
-                df_srw = get_mohid_timeseries_1_file(str(srw_path))
-            else:
-                df_srw = None
-
-            if df_srh is not None and df_srw is not None:
-                # Drop columns from srw that already exist in srh to avoid duplicates
-                new_cols = [c for c in df_srw.columns if c not in df_srh.columns]
-                # Align on index (usually the time index) and append the new columns
-                merged = df_srh.join(df_srw[new_cols], how='left')
-                results[idx] = merged
-            elif df_srh is not None:
-                results[idx] = df_srh
-            elif df_srw is not None:
-                results[idx] = df_srw
-
-        except Exception as e:
-            print(f"Warning: failed to read files for index {idx}: {e}")
-
-    return results
