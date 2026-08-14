@@ -1,23 +1,18 @@
 """
-Provides functions to compare model output against a reference (reference simulation or observations),
-using common metrics, and utilities to apply them across multiple runs outputs.
+Provides functions to compare model output against a reference (reference simulation or observations)
+using common metrics, and utilities to apply them.
 
 Metrics
 -------
 - rmse              : Root Mean Square Error
 - bias              : Mean bias (run - reference)
-- rrmse             : Relative RMSE (RMSE / mean of reference)
-- sensitivity_index : RMSE normalized by the reference range (max - min)
 - pearson_r         : Pearson correlation coefficient
 - mss               : Model Skill Score 
 
 Application helpers
 -------------------
-- compare_vs_reference : Apply a metric between one run and the reference.
-- compare_all_runs     : Apply a metric between every run and the reference
-                        in a dictionary of runs.
-- by_layer             : Reorganize a per-run dict of metric DataFrames into a per-layer dict.
-- layers_to_dataarray  : Convert dataframe column to dataarray with dimesions.
+- compare_vs_reference  : Compare model output to a reference by a metric function.
+- compare_multi_metrics : Compare model output to a reference by several metric functions.
 
 Author: Karolina Anurova-Prykhodko
 """
@@ -27,42 +22,23 @@ import numpy as np
 import xarray as xr
 from scipy.stats import pearsonr
 
-def rmse(a, b):
-    """Root Mean Square Error (column-wise)."""
-    return np.sqrt(((a - b) ** 2).mean(axis=0))
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
 
+
+def rmse(a, b):
+    """Root Mean Square Error,
+    where `a` = model, `b` = observations (reference). """
+    return np.sqrt(((a - b) ** 2).mean(axis=0))
 
 def bias(a, b):
     """
-    Mean bias (column-wise): mean(a - b).
-    Positive => run overestimates the reference.
-    """
+    Mean bias, where `a` = model, `b` = observations (reference). """
     return (a - b).mean(axis=0)
 
-
-def rrmse(a, b):
-    """
-    Relative RMSE (column-wise), expressed as a percentage:
-
-        RRMSE = RMSE(a, b) / mean(a) * 100
-
-    where `a` = model data and `b` = measurement data.
-    Returns NaN where the model mean is zero.
-    """
-    r = rmse(a, b)
-    model_mean = a.mean(axis=0).replace(0, np.nan)
-    return r / model_mean * 100
-
-
-def sensitivity_index(a, b):
-    """Sensitivity Index (column-wise): RMSE / (b_max - b_min)."""
-    r = rmse(a, b)
-    ref_range = b.max(axis=0) - b.min(axis=0)
-    ref_range = ref_range.replace(0, np.nan)
-    return r / ref_range
-
-
 def pearson_r(a, b):
+    
     return pearsonr(a, b)[0]
 
 def mss(a, b):
@@ -88,78 +64,12 @@ def mss(a, b):
     return 1 - num / denom
 
 
-def layers_to_dataarray(run_dict, column='velocity_U', range_name='range'):
-    """
-    Convert a dict of per-layer DataFrames into a DataArray (range, time),
-    preserving the datetime index from the source DataFrames.
+# ---------------------------------------------------------------------------
+# Application helpers
+# ---------------------------------------------------------------------------
 
-    Parameters
-    ----------
-    run_dict : dict[int, pd.DataFrame]
-        e.g. all_results['Run1']; each value is a DataFrame indexed by time
-        and containing `column`.
-    column : str
-        Column to extract.
-    range_name : str
-        Name of the layer/range coordinate.
 
-    Returns
-    -------
-    xarray.DataArray with dims (range, time)
-    """
-    layers = sorted(run_dict.keys())
-
-    # Keep the original (datetime) index; concat aligns on it automatically
-    series_list = [run_dict[k][column].rename(k) for k in layers]
-    df = pd.concat(series_list, axis=1)      # index = time, columns = layers
-    df = df.sort_index()
-
-    data = df.values.T                       # (n_layers, n_time)
-
-    da = xr.DataArray(
-        data,
-        dims=(range_name, 'time'),
-        coords={
-            range_name: np.array(layers, dtype=float),
-            'time': df.index.values,         # preserved datetimes
-        },
-        name=column,
-    )
-    return da
-
-# perhaps use for SST or remove
-def compare_vs_reference_da(run_da, ref_da, metric_fn,
-                            range_dim='range', time_dim='time'):
-    """
-    Compare two DataArrays layer-by-layer along `range_dim`.
-
-    Parameters
-    ----------
-    run_da, ref_da : xarray.DataArray
-        Must share `range_dim` and `time_dim`.
-    metric_fn : callable(a, b) -> float
-        Takes two 1D numpy arrays (already NaN-aligned) and returns a scalar.
-
-    Returns
-    -------
-    pd.Series indexed by range values.
-    """
-    # Align on time
-    a, b = xr.align(run_da, ref_da, join='inner')
-
-    results = {}
-    for r in a[range_dim].values:
-        x = a.sel({range_dim: r}).values
-        y = b.sel({range_dim: r}).values
-        mask = np.isfinite(x) & np.isfinite(y)
-        if mask.sum() == 0:
-            results[r] = np.nan
-        else:
-            results[r] = metric_fn(x[mask], y[mask])
-
-    return pd.Series(results).sort_index()
-
-def compare_vs_reference_df(run, reference, metric_fn, columns=None):
+def compare_vs_reference(run, reference, metric_fn, columns=None):
     """
     Compare model output against a reference, computing the function(s)
     metric_fn per column.
@@ -219,7 +129,7 @@ def compare_vs_reference_df(run, reference, metric_fn, columns=None):
 
 def compare_multi_metrics(run, reference, metric_fns, columns=None, run_name=None):
     """
-    Compare a run DataFrame against a reference across multiple metrics.
+    Compare model output against a reference across multiple metrics.
 
     Parameters
     ----------
@@ -239,7 +149,7 @@ def compare_multi_metrics(run, reference, metric_fns, columns=None, run_name=Non
     """
     series_list = []
     for fn in metric_fns:
-        s = compare_vs_reference_df(run, reference, fn, columns=columns)
+        s = compare_vs_reference(run, reference, fn, columns=columns)
         # Use the callable's __name__ (fallback for things like pearsonr wrappers)
         s.name = getattr(fn, "__name__", str(fn))
         series_list.append(s)

@@ -1,9 +1,9 @@
 """
-General helpers
+General helpers related to interpolation of model output
+velocities to vertical geometry of ADCP data.
 
 Author: Karolina Anurova-Prykhodko
 """
-
 
 import numpy as np
 import pandas as pd
@@ -43,6 +43,45 @@ def group_layers_by_bin(depths, bins, available_layers):
         if b is not None:
             groups[b].append(layer)
     return groups
+
+def layers_to_dataarray(run_dict, column='velocity_U', range_name='range'):
+    """
+    Convert a dict of per-layer DataFrames into a DataArray (range, time),
+    preserving the datetime index from the source DataFrames.
+
+    Parameters
+    ----------
+    run_dict : dict[int, pd.DataFrame]
+        e.g. all_results['Run1']; each value is a DataFrame indexed by time
+        and containing `column`.
+    column : str
+        Column to extract.
+    range_name : str
+        Name of the layer/range coordinate.
+
+    Returns
+    -------
+    xarray.DataArray with dims (range, time)
+    """
+    layers = sorted(run_dict.keys())
+
+    # Keep the original (datetime) index; concat aligns on it automatically
+    series_list = [run_dict[k][column].rename(k) for k in layers]
+    df = pd.concat(series_list, axis=1)      # index = time, columns = layers
+    df = df.sort_index()
+
+    data = df.values.T                       # (n_layers, n_time)
+
+    da = xr.DataArray(
+        data,
+        dims=(range_name, 'time'),
+        coords={
+            range_name: np.array(layers, dtype=float),
+            'time': df.index.values,         # preserved datetimes
+        },
+        name=column,
+    )
+    return da
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +139,7 @@ def _aggregate_bin(run_dict, layers, thickness_map, circular_cols, uv_cols):
 
 
 # ---------------------------------------------------------------------------
-# Public entry point
+# Aggregation
 # ---------------------------------------------------------------------------
 
 def aggregate_run(
