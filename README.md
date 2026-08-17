@@ -24,8 +24,12 @@ The repository demostrates API data acquisition, oceanographic data processing, 
 ### Notebooks/
 
 #### - preprocessing/
-- ADCP.ipynb: processes raw ADCP data to Netcdf and csv, applies quality control. 
+  
+- rawtonc_conversion.ipynb: converts raw ADCP data to NetCDF.
+- quality_flagging_08.ipynb: applies quality control to ADCP data.
+- processing_08.ipynb: cleans and processes ADCP data into csv.
 - CERRA.ipynb: API download of CERRA data, processes and convert atmospheric forcing from Netcdf to Hdf5.
+- convtohdf.dat: configuration file of CERRA data conversion.
 - discharge_conversion.ipynb: convert submarine discharge flow from xlsx time-series to .dat format.
 
 #### - validation/
