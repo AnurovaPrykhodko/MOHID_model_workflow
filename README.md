@@ -1,25 +1,39 @@
-# MOHID_model_workflow (ongoing internship):
+# MOHID_model_workflow:
 
-This repository contains Python modules and Jupyter notebooks for preprocessing and postprocessing data input and output of MOHID. 
+This repository contains a scientific Python workflow developed during my internship in numerical ocean modelling. The purpose is to:
+- process environmental forcing data into MOHID model-ready format.
+- process model output.
+- evaluate model performance against observations of ADCP, tide gauge and satellite data.
 
-## Modules
+The repository demostrates API data acquisition, oceanographic data processing, model validation metrics and visualisation, and reproducible analysis using Python modules and Jupyter Notebooks. 
 
-#### ADCP_quality flagging
+# Repository structure:
 
-- Functions related to quality control, as well as application and visualization of quality flags. See [ADCP-internship repository](https://github.com/AnurovaPrykhodko/ADCP-internship) for description of the quality flag scheme.
+## Modules/
 
-#### read_timeseries
-- Functions to read MOHID timeseries files and merge multiple run outputs to a dict.
-#### metrics
+#### ADCP.py
+Functions for processing ADCP data, applying quality control, and visualising quality flags and data. 
 
-- Functions to compare model output against a reference (reference simulation or observations), using common metrics, and utilities to apply them across multiple runs outputs.
-## Notebooks 
+#### read_files.py
+Utilites for reading and converting MOHID output files.
 
-#### preprocessing
+#### metrics.py
+Functions for comparing model output against a reference using common metrics, and utilities to apply them.
 
-#### sensitivity analysis
+#### helpers.py
+Helpers related to interpolating model output to match the ADCP data in order to compare them.
 
-#### calibration
+## Notebooks/
 
-#### validation
+#### preprocessing/
+- ADCP.ipynb: processes raw ADCP data to Netcdf and csv, applies quality control. 
+- CERRA.ipynb: API download of CERRA data, processes and convert atmospheric forcing from Netcdf to Hdf5.
+- discharge_conversion.ipynb: convert submarine discharge flow from xlsx time-series to .dat format.
 
+#### validation/
+- validation_ADCP.ipynb: reads and interpolate model output .srh files to the geometry of the ADCP observations, and compares them.
+- validation_gauge.ipynb: Compares tide gauge waterlevel from Puertos del Estado and model output.
+- validation_SST.ipynb: API download of ODYSSEA satellite data, reads  model output Hdf5 files, and compares between.
+
+## mohid/
+Tools to convert Netcdf data to Hdf5 from MARETEC (https://github.com/Mohid-Water-Modelling-System, GNU General Public License)
