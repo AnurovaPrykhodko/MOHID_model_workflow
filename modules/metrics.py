@@ -9,6 +9,8 @@ Metrics
 - pearson_r         : Pearson correlation coefficient
 - mss               : Model Skill Score 
 
+(each metrics has a duplicate for the circular version for variables such at velocity direction or tidal phase)
+
 Application helpers
 -------------------
 - compare_vs_reference  : Compare model output to a reference by a metric function.
@@ -21,6 +23,7 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 from scipy.stats import pearsonr
+from scipy.stats import circmean
 
 # ---------------------------------------------------------------------------
 # Metrics
@@ -63,6 +66,166 @@ def mss(a, b):
 
     return 1 - num / denom
 
+
+def circular_diff(a, b):
+    """
+    Shortest signed circular difference assuming a 360-degree cycle.
+    """
+    return (a - b + 180) % 360 - 180
+
+
+
+def circular_corr(a, b, axis=0):
+    """
+    Circular-circular correlation coefficient, assuming a 360-degree cycle.
+
+    This is appropriate when both `a` and `b` are circular variables,
+    for example model wind direction vs observed wind direction.
+
+    Parameters
+    ----------
+    a, b : array-like
+        Circular variables in degrees.
+
+    axis : int
+        Axis along which to calculate correlation.
+
+    Returns
+    -------
+    float or np.ndarray
+        Circular correlation coefficient.
+    """
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+
+    if a.shape != b.shape:
+        raise ValueError("a and b must have the same shape.")
+
+    # Move target axis to the front
+    a = np.moveaxis(a, axis, 0)
+    b = np.moveaxis(b, axis, 0)
+
+    out_shape = a.shape[1:]
+    result = np.full(out_shape, np.nan, dtype=float)
+
+    a_flat = a.reshape(a.shape[0], -1)
+    b_flat = b.reshape(b.shape[0], -1)
+
+    for i in range(a_flat.shape[1]):
+        ai = a_flat[:, i]
+        bi = b_flat[:, i]
+
+        valid = np.isfinite(ai) & np.isfinite(bi)
+
+        if valid.sum() < 2:
+            continue
+
+        ai = ai[valid]
+        bi = bi[valid]
+
+        alpha = ai * 2 * np.pi / 360
+        beta = bi * 2 * np.pi / 360
+
+        alpha_bar = np.arctan2(
+            np.mean(np.sin(alpha)),
+            np.mean(np.cos(alpha)),
+        )
+
+        beta_bar = np.arctan2(
+            np.mean(np.sin(beta)),
+            np.mean(np.cos(beta)),
+        )
+
+        sin_alpha = np.sin(alpha - alpha_bar)
+        sin_beta = np.sin(beta - beta_bar)
+
+        num = np.sum(sin_alpha * sin_beta)
+        denom = np.sqrt(
+            np.sum(sin_alpha ** 2) * np.sum(sin_beta ** 2)
+        )
+
+        if denom != 0:
+            result.reshape(-1)[i] = num / denom
+
+    if result.shape == ():
+        return float(result)
+
+    return result
+
+
+def rmse_circ(a, b):
+    """
+    RMSE for circular variables in degrees (direction, phase). 
+    """
+    err = circular_diff(a, b)
+
+    return np.sqrt(np.nanmean(err ** 2, axis=0))
+
+
+def bias_circ(a, b):
+    """
+    Circular mean bias in degrees.
+    """
+    err = circular_diff(a, b)
+
+    return circmean(err, high=180, low=-180, nan_policy="omit", axis=0)
+
+
+def pearson_r_circ(a, b):
+    """
+    Circular-circular correlation coefficient, assuming a 360-degree cycle.
+
+    This replaces standard Pearson correlation for circular variables.
+
+    Parameters
+    ----------
+    a : array-like
+        Model circular values in degrees.
+
+    b : array-like
+        Reference circular values in degrees.
+
+    Returns
+    -------
+    float or np.ndarray
+        Circular correlation coefficient.
+    """
+    return circular_corr(a, b, axis=0)
+
+
+def mss_circ(a, b):
+    """
+    Circular Willmott's Model Skill Score, assuming a 360-degree cycle.
+
+    Uses circular distances instead of linear distances.
+
+    Parameters
+    ----------
+    a : array-like
+        Model circular values in degrees.
+
+    b : array-like
+        Reference circular values in degrees.
+
+    Returns
+    -------
+    float or np.ndarray
+        Circular Model Skill Score.
+    """
+    b_mean = circmean(b, high=180, low=-180, nan_policy="omit", axis=0)
+    num = np.nansum(
+        circular_diff(a, b) ** 2,
+        axis=0,
+    )
+
+    denom = np.nansum(
+        (
+            np.abs(circular_diff(a, b_mean))
+            + np.abs(circular_diff(b, b_mean))
+        ) ** 2,
+        axis=0,
+    )
+    return 1 - num / denom
 
 # ---------------------------------------------------------------------------
 # Application helpers
@@ -127,7 +290,7 @@ def compare_vs_reference(run, reference, metric_fn, columns=None):
 
     return pd.Series(results, name=metric_fn.__name__)
 
-def compare_multi_metrics(run, reference, metric_fns, columns=None, run_name=None):
+def compare_multi_metrics(run, reference, metric_fns, columns=None):
     """
     Compare model output against a reference across multiple metrics.
 
