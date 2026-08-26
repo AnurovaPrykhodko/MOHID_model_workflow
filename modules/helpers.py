@@ -7,7 +7,7 @@ Author: Karolina Anurova-Prykhodko
 
 import numpy as np
 import pandas as pd
-
+import xarray as xr
 
 # ---------------------------------------------------------------------------
 # Geometry helpers
