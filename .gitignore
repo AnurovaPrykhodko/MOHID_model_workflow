@@ -1,3 +1,8 @@
 data/
 .vscode
 __pycache__
+/results
+/figures
+/notebooks/calibration
+/notebooks/preprocessing/ADCP/quality_flagging_11.ipynb
+/notebooks/preprocessing/ADCP/processing_11.ipynb
