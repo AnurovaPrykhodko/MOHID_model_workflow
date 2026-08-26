@@ -1,5 +1,5 @@
 """
-Provides functions related to reading MOHID output files.
+Provides functions related to reading and converting MOHID output files.
 
 Functions (original)
 ---------
