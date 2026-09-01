@@ -3,7 +3,7 @@
  ACTION                    ConvertToHDF5             Do not have               From Block                CONVERT NETCDF CF TO HDF5 MOHID                              YES
  FILENAME                  ModuleNetCDFCF_2_HDF5MOHI Do not have               From Block                ************                                                 YES
  OUTPUT_GRID_FILENAME      ModuleNetCDFCF_2_HDF5MOHI Do not have               From Block                ************                                                 YES
- OUTPUTFILENAME            ModuleNetCDFCF_2_HDF5MOHI Do not have               From Block                ..\..\data\preprocessing\CERRA\conversion\cerra.hdf5         YES
+ OUTPUTFILENAME            ModuleNetCDFCF_2_HDF5MOHI Do not have               From Block                ..\..\data\CERRA\conversion\cerra.hdf5                       YES
  OUTPUT_GEOMETRY_FILENAME  ModuleNetCDFCF_2_HDF5MOHI Do not have               From Block                ************                                                 YES
  PROPERTIES_NUMBER         ModuleNetCDFCF_2_HDF5MOHI Do not have               From Block                8                                                            YES
  HDF5_OUT                  ModuleNetCDFCF_2_HDF5MOHI TRUE                      From Block                TRUE                                                         YES
