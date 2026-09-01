@@ -166,6 +166,85 @@ def MOHIDHdf5toNetcdf(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''
 
     return t, dates
 
+def MOHIDHdf5toNetcdf_wind(filename, dates= [['0']], in_t=0, file_stride=0, outdir=''):
+    f = h5py.File(filename,'r')
+    
+    dims = ['lat','lon']
+    coords={'lat': (('lat'),f['Grid']['Latitude'][0,:-1]),
+            'lon': (('lon'),f['Grid']['Longitude'][:-1,0])}
+    
+    TimeList = list(f['Time'].keys())
+    
+    dates_in = dates
+    
+#    #Writing variables from 'Results'
+    var_to_write=['wind velocity X', 'wind velocity Y']
+    var_to_read=['wind velocity X', 'wind velocity Y']  
+    t=in_t
+
+    timeindex=-1
+    for timestep in TimeList:
+        readtime = 1
+        timeindex=timeindex+1
+        date=f['Time'][TimeList[timeindex]][:].transpose()
+        date=''.join(str(e) for e in date)
+        for sublist in dates:
+            if sublist == date:
+                readtime = 0
+        if readtime == 1:
+            dates=np.vstack((dates,date))
+            k=0
+            #if stride == file_stride:
+            for var in var_to_read:
+                TimeVar = var+timestep[-6:]
+                if f['Results'][var][TimeVar].ndim == 2:
+                    data = f['Results'][var][TimeVar][:,:].transpose()
+                    temp = xr.DataArray(data, coords=coords, dims=dims)
+                    temp.encoding['_FillValue'] = float(data.min())
+                elif f['Results'][var][TimeVar].ndim > 2:
+                    temp = xr.DataArray(f['Results'][var][TimeVar][-1,:,:].transpose(), coords=coords, dims=dims)
+                ds=xr.Dataset({var_to_write[k]:temp})
+                if k == 0:
+                    ds.to_netcdf(outdir+'Atmosphere_'+str(t).zfill(4)+'.nc',mode='w')
+                elif k > 0 :
+                    ds.to_netcdf(outdir+'Atmosphere_'+str(t).zfill(4)+'.nc',mode='a')
+                k=k+1        
+            t=t+1
+        
+    #Writing variables from 'Grid'
+    var_to_write=['Bathymetry']
+    var_to_read=['Bathymetry']
+    t=in_t
+    dates = dates_in
+    #stride = file_stride
+    timeindex=-1
+    for timestep in TimeList:
+        readtime = 1
+        timeindex=timeindex+1
+        date=f['Time'][TimeList[timeindex]][:].transpose()
+        date=''.join(str(e) for e in date)
+        for sublist in dates:
+            if sublist == date:
+                readtime = 0
+        if readtime == 1:
+            dates=np.vstack((dates,date))
+            k=0
+            #if stride == file_stride:
+            for var in var_to_read:
+                TimeVar = var+timestep[-6:]
+                if f['Grid'][var].ndim == 2:
+                    data = f['Grid'][var][:,:].transpose()
+                    temp = xr.DataArray(data, coords=coords, dims=dims)
+                    temp.encoding['_FillValue'] = float(data.min())
+                elif f['Grid'][var].ndim > 2:
+                    temp = xr.DataArray(f['Grid'][var][-1,:,:].transpose(), coords=coords, dims=dims)
+                ds=xr.Dataset({var_to_write[k]:temp})        
+                ds.to_netcdf(outdir+'Atmosphere_'+str(t).zfill(4)+'.nc',mode='a')
+                k=k+1
+            t=t+1
+
+    return t, dates
+
 def get_mohid_timeseries_1_file(file, remove_time_0=True):
     """
     Copied from MARETEC.
