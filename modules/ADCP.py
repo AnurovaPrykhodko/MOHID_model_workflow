@@ -23,6 +23,7 @@ Visualization
 - plot_qc_primary       : Plot primary QC flags.
 - plot_qc_secondary     : Plot secondary QC flags.
 - plot_profiles         : Plot individual velocity profiles and their mean profile.
+- plot_rose             : Plot "windrose".
 
 Utility functions
 -----------------
@@ -39,6 +40,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch
 from matplotlib.ticker import FormatStrFormatter
+from windrose import WindroseAxes
+import matplotlib.ticker as mtick
 import numpy as np
 import xarray as xr
 from scipy.interpolate import interp1d
@@ -523,6 +526,85 @@ def plot_profiles(vel, range_coord='range', range_slice=(5, 25),
     ax.grid(alpha=0.2)
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     plt.tight_layout()
+    return ax
+
+def plot_rose(velocity_direction, velocity_speed, bins, labels,
+                  legend_title='Current Speed (m/s)',
+                  title='', outdir = None, cmap = None):
+    """
+    Plot and export a "windrose" with custom bin boundaries and legend labels.
+
+    Parameters
+    ----------
+    velocity_direction : array
+
+    velocity_speed : array
+
+    bins : array-like
+        Bin boundaries. For example:
+        [0, 0.04, 0.08, 0.10, 0.12, 0.13]
+
+    labels : list of str, optional
+        Custom legend labels. Must contain len(bins)-1 labels.
+
+    legend_title : str, optional
+        Title of the legend.
+
+    title : str, optional
+        Plot title.
+    """
+    if outdir is None:
+        outdir = f'../../results/validation/ADCP/rose_{title}.png'
+    
+    bins = np.asarray(bins)
+
+
+    # rounds the triangles
+    plt.hist([0, 1])
+    plt.close()
+
+    ax = WindroseAxes.from_ax()
+
+    if cmap is None:
+        cmap=plt.cm.viridis
+    elif cmap == 'Blues':
+        cmap=plt.cm.Blues
+    elif cmap == 'Greens':
+        cmap=plt.cm.Greens
+    elif cmap == 'Reds':
+        cmap=plt.cm.Reds
+
+    ax.bar(
+        velocity_direction,
+        velocity_speed,
+        bins=bins,
+        normed=True,
+        opening=0.85,
+        linewidth=0.5,
+        edgecolor='black',
+        cmap=cmap
+    )
+
+    # Create legend
+    legend = ax.set_legend(
+        title=legend_title,
+        title_fontsize=18,
+    )
+
+    # Replace automatically generated labels
+    for text, label in zip(legend.get_texts(), labels):
+        text.set_text(label)
+        text.set_fontsize(18)
+
+    # Plot title
+    ax.set_title(title, fontsize=22)
+
+    # Format radius axis as percentages
+    ax.yaxis.set_major_formatter(
+        mtick.FormatStrFormatter('%.0f%%')
+    )
+    plt.savefig(outdir, dpi=300, bbox_inches="tight")
+    plt.show()
     return ax
 
 def speed(df):
